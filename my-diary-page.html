@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>我的漫畫慢生活日記</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      background: #fdf6e3;
+    }
+    input, textarea {
+      display: block;
+      margin: 1rem 0;
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      background: #88c0d0;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    .entry {
+      background: white;
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📖 我的漫畫慢生活日記</h1>
+
+  <input type="text" id="title" placeholder="今天看的漫畫 / 書名">
+  <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
+  <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊">
+  <button onclick="addEntry()">加入日記</button>
+
+  <div id="entries"></div>
+
+  <script>
+    function addEntry() {
+      const title = document.getElementById("title").value;
+      const thoughts = document.getElementById("thoughts").value;
+      const emoji = document.getElementById("emoji").value;
+
+      const entryDiv = document.createElement("div");
+      entryDiv.className = "entry";
+      entryDiv.innerHTML = `<h3>${title}</h3><p>${thoughts}</p><p>${emoji}</p>`;
+
+      document.getElementById("entries").appendChild(entryDiv);
+
+      // 清空輸入欄
+      document.getElementById("title").value = "";
+      document.getElementById("thoughts").value = "";
+      document.getElementById("emoji").value = "";
+    }
+  </script>
+</body>
+</html>
