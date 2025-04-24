@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>我的漫畫慢生活日記</title>
+  <title>📖 我的漫畫慢生活日記</title>
   <style>
     body {
       font-family: sans-serif;
@@ -37,27 +37,72 @@
   <input type="text" id="title" placeholder="今天看的漫畫 / 書名">
   <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
   <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊">
-  <button onclick="addEntry()">加入日記</button>
+  <button id="addEntry">加入日記</button>
 
   <div id="entries"></div>
 
-  <script>
-    function addEntry() {
-      const title = document.getElementById("title").value;
-      const thoughts = document.getElementById("thoughts").value;
-      const emoji = document.getElementById("emoji").value;
+  <!-- Firebase 模組寫法 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
 
-      const entryDiv = document.createElement("div");
-      entryDiv.className = "entry";
-      entryDiv.innerHTML = `<h3>${title}</h3><p>${thoughts}</p><p>${emoji}</p>`;
+    const firebaseConfig = {
+      apiKey: "AIzaSyDubkeIiVxXQ-fAUU5KTCuh15EnP0k-NiY",
+      authDomain: "diary-web-7384b.firebaseapp.com",
+      databaseURL: "https://diary-web-7384b-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "diary-web-7384b",
+      storageBucket: "diary-web-7384b.firebasestorage.app",
+      messagingSenderId: "992846427066",
+      appId: "1:992846427066:web:77e054330f232d44352383",
+      measurementId: "G-N3ZCCZXX7T"
+    };
 
-      document.getElementById("entries").appendChild(entryDiv);
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-      // 清空輸入欄
-      document.getElementById("title").value = "";
-      document.getElementById("thoughts").value = "";
-      document.getElementById("emoji").value = "";
-    }
+    const titleInput = document.getElementById("title");
+    const thoughtsInput = document.getElementById("thoughts");
+    const emojiInput = document.getElementById("emoji");
+    const entriesDiv = document.getElementById("entries");
+    const addEntryBtn = document.getElementById("addEntry");
+
+    addEntryBtn.addEventListener("click", () => {
+      const title = titleInput.value;
+      const thoughts = thoughtsInput.value;
+      const emoji = emojiInput.value;
+
+      if (!title || !thoughts || !emoji) return;
+
+      const entry = {
+        title,
+        thoughts,
+        emoji,
+        createdAt: Date.now()
+      };
+
+      push(ref(db, "entries"), entry);
+
+      titleInput.value = "";
+      thoughtsInput.value = "";
+      emojiInput.value = "";
+    });
+
+    onValue(ref(db, "entries"), (snapshot) => {
+      const data = snapshot.val();
+      entriesDiv.innerHTML = "";
+
+      const sorted = Object.entries(data || {}).sort((a, b) => b[1].createdAt - a[1].createdAt);
+      sorted.forEach(([key, entry]) => {
+        const entryDiv = document.createElement("div");
+        entryDiv.className = "entry";
+        entryDiv.innerHTML = `
+          <h3>${entry.title}</h3>
+          <p>${entry.thoughts}</p>
+          <p>${entry.emoji}</p>
+        `;
+        entriesDiv.appendChild(entryDiv);
+      });
+    });
   </script>
 </body>
 </html>
