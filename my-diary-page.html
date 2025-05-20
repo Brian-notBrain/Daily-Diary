@@ -22,6 +22,7 @@
       border: none;
       color: white;
       cursor: pointer;
+      margin-right: 1rem;
     }
     .entry {
       background: white;
@@ -34,10 +35,14 @@
 <body>
   <h1>📖 我的漫畫慢生活日記</h1>
 
+  <button id="login">使用 Google 登入</button>
+  <button id="logout" style="display: none;">登出</button>
+  <p id="user-info">請先登入以寫日記</p>
+
   <input type="text" id="title" placeholder="今天看的漫畫 / 書名">
   <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
   <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊">
-  <button id="addEntry">加入日記</button>
+  <button id="addEntry" disabled>加入日記</button>
 
   <div id="entries"></div>
 
@@ -45,6 +50,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
     import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDubkeIiVxXQ-fAUU5KTCuh15EnP0k-NiY",
@@ -59,12 +65,41 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
 
     const titleInput = document.getElementById("title");
     const thoughtsInput = document.getElementById("thoughts");
     const emojiInput = document.getElementById("emoji");
     const entriesDiv = document.getElementById("entries");
     const addEntryBtn = document.getElementById("addEntry");
+    const loginBtn = document.getElementById("login");
+    const logoutBtn = document.getElementById("logout");
+    const userInfo = document.getElementById("user-info");
+
+    loginBtn.addEventListener("click", () => {
+      signInWithPopup(auth, provider).catch((error) => {
+        console.error("登入失敗", error);
+      });
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      signOut(auth);
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        userInfo.textContent = `👋 歡迎, ${user.displayName}`;
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        addEntryBtn.disabled = false;
+      } else {
+        userInfo.textContent = "請先登入以寫日記";
+        loginBtn.style.display = "inline-block";
+        logoutBtn.style.display = "none";
+        addEntryBtn.disabled = true;
+      }
+    });
 
     addEntryBtn.addEventListener("click", () => {
       const title = titleInput.value;
