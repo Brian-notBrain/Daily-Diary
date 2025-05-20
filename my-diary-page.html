@@ -1,27 +1,22 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>📖 我的漫畫慢生活日記</title>
   <style>
     body {
       font-family: sans-serif;
       padding: 2rem;
       background: #fdf6e3;
-      position: relative;
     }
-    h1 {
-      display: inline-block;
-    }
-    #user-info {
+    #auth-section {
       position: absolute;
-      top: 2rem;
-      right: 2rem;
-      text-align: right;
+      top: 1rem;
+      right: 1rem;
     }
     input, textarea {
       display: block;
-      margin: 1rem 0;
+      margin: 0.5rem 0;
       width: 100%;
       padding: 0.5rem;
       font-size: 1rem;
@@ -32,46 +27,62 @@
       border: none;
       color: white;
       cursor: pointer;
-      margin-top: 1rem;
+      margin-top: 0.5rem;
     }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    .entry {
+    .entry, .archive-entry {
       background: white;
       margin-top: 1rem;
       padding: 1rem;
       border-radius: 8px;
     }
+    #archive-controls {
+      margin-top: 1rem;
+    }
+    #archive-section {
+      margin-top: 3rem;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
   </style>
 </head>
 <body>
   <h1>📖 我的漫畫慢生活日記</h1>
-  <div id="user-info">
-    <span id="username"></span>
-    <button id="logout" style="display: none;">登出</button>
-    <button id="login">使用 Google 登入</button>
+
+  <div id="auth-section">
+    <span id="user-name"></span>
+    <button id="login-btn">Google 登入</button>
+    <button id="logout-btn" style="display:none;">登出</button>
   </div>
 
-  <input type="text" id="title" placeholder="今天看的漫畫 / 書名">
-  <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
-  <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊">
-  <button id="addEntry" disabled>加入日記</button>
+  <div id="diary-form" style="display: none;">
+    <input type="text" id="title" placeholder="今天看的漫畫 / 書名" />
+    <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
+    <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊" />
+    <input type="date" id="date" />
+    <div class="toggle-row">
+      <label for="isPublic">是否公開：</label>
+      <input type="checkbox" id="isPublic" />
+    </div>
+    <button id="addEntry">加入日記</button>
+  </div>
 
-  <div id="entries"></div>
+  <div id="archive-section">
+    <h2>📚 過往日記</h2>
+    <div id="archive-entries"></div>
+    <div id="archive-controls">
+      <button id="prev-btn">←</button>
+      <button id="next-btn">→</button>
+    </div>
+  </div>
 
-  <!-- Firebase 模組寫法 -->
+  <!-- Firebase Module -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
-    import {
-      getAuth,
-      signInWithPopup,
-      GoogleAuthProvider,
-      signOut,
-      onAuthStateChanged
-    } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import { getDatabase, ref, push, onValue, get, child } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDubkeIiVxXQ-fAUU5KTCuh15EnP0k-NiY",
@@ -85,87 +96,126 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const auth = getAuth(app);
+    const auth = getAuth();
     const provider = new GoogleAuthProvider();
 
-    const loginBtn = document.getElementById("login");
-    const logoutBtn = document.getElementById("logout");
-    const usernameSpan = document.getElementById("username");
-    const addEntryBtn = document.getElementById("addEntry");
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const userNameSpan = document.getElementById("user-name");
+    const diaryForm = document.getElementById("diary-form");
+
     const titleInput = document.getElementById("title");
     const thoughtsInput = document.getElementById("thoughts");
     const emojiInput = document.getElementById("emoji");
-    const entriesDiv = document.getElementById("entries");
+    const dateInput = document.getElementById("date");
+    const isPublicInput = document.getElementById("isPublic");
+    const addEntryBtn = document.getElementById("addEntry");
+    const archiveDiv = document.getElementById("archive-entries");
+    const prevBtn = document.getElementById("prev-btn");
+    const nextBtn = document.getElementById("next-btn");
 
     let currentUser = null;
+    let allEntries = [];
+    let currentPage = 0;
+    const ENTRIES_PER_PAGE = 3;
 
-    loginBtn.addEventListener("click", () => {
-      signInWithPopup(auth, provider).catch((error) => {
-        console.error("登入失敗", error);
-      });
-    });
-
-    logoutBtn.addEventListener("click", () => {
-      signOut(auth);
-    });
+    loginBtn.onclick = () => signInWithPopup(auth, provider);
+    logoutBtn.onclick = () => signOut(auth);
 
     onAuthStateChanged(auth, (user) => {
+      currentUser = user;
       if (user) {
-        currentUser = user;
-        usernameSpan.textContent = `${user.displayName}`;
+        userNameSpan.textContent = `你好，${user.displayName}`;
         loginBtn.style.display = "none";
-        logoutBtn.style.display = "inline-block";
-        addEntryBtn.disabled = false;
-        loadEntries(user.uid);
+        logoutBtn.style.display = "inline";
+        diaryForm.style.display = "block";
       } else {
-        currentUser = null;
-        usernameSpan.textContent = "";
-        loginBtn.style.display = "inline-block";
+        userNameSpan.textContent = "";
+        loginBtn.style.display = "inline";
         logoutBtn.style.display = "none";
-        addEntryBtn.disabled = true;
-        entriesDiv.innerHTML = "<p>請先登入以查看你的日記。</p>";
+        diaryForm.style.display = "none";
       }
+      fetchEntries();
     });
 
-    addEntryBtn.addEventListener("click", () => {
+    addEntryBtn.onclick = () => {
       const title = titleInput.value.trim();
       const thoughts = thoughtsInput.value.trim();
       const emoji = emojiInput.value.trim();
-      if (!title || !thoughts || !emoji || !currentUser) return;
+      const date = dateInput.value.trim();
+      const isPublic = isPublicInput.checked;
+
+      if (!title || !thoughts || !emoji || !date) {
+        alert("請填寫所有欄位");
+        return;
+      }
 
       const entry = {
         title,
         thoughts,
         emoji,
+        date,
+        isPublic,
+        uid: currentUser.uid,
         createdAt: Date.now()
       };
 
-      const userRef = ref(db, `users/${currentUser.uid}/entries`);
-      push(userRef, entry);
+      push(ref(db, "diaryEntries"), entry);
 
       titleInput.value = "";
       thoughtsInput.value = "";
       emojiInput.value = "";
-    });
+      dateInput.value = "";
+      isPublicInput.checked = false;
+    };
 
-    function loadEntries(uid) {
-      const userRef = ref(db, `users/${uid}/entries`);
-      onValue(userRef, (snapshot) => {
-        const data = snapshot.val();
-        entriesDiv.innerHTML = "";
-        const sorted = Object.entries(data || {}).sort((a, b) => b[1].createdAt - a[1].createdAt);
-        sorted.forEach(([key, entry]) => {
-          const entryDiv = document.createElement("div");
-          entryDiv.className = "entry";
-          entryDiv.innerHTML = `
-            <h3>${entry.title}</h3>
-            <p>${entry.thoughts}</p>
-            <p>${entry.emoji}</p>
-          `;
-          entriesDiv.appendChild(entryDiv);
-        });
+    function fetchEntries() {
+      get(ref(db, "diaryEntries")).then((snapshot) => {
+        const data = snapshot.val() || {};
+        allEntries = Object.values(data).filter(entry => {
+          return entry.isPublic || (currentUser && entry.uid === currentUser.uid);
+        }).sort((a, b) => b.createdAt - a.createdAt);
+        renderArchive();
       });
     }
+
+    function renderArchive() {
+      archiveDiv.innerHTML = "";
+      const start = currentPage * ENTRIES_PER_PAGE;
+      const pageEntries = allEntries.slice(start, start + ENTRIES_PER_PAGE);
+
+      pageEntries.forEach(entry => {
+        const div = document.createElement("div");
+        div.className = "archive-entry";
+        div.innerHTML = `
+          <h3>${entry.title}</h3>
+          <p>${entry.thoughts}</p>
+          <p>${entry.emoji}</p>
+          <p><strong>${entry.date}</strong></p>
+        `;
+        archiveDiv.appendChild(div);
+      });
+
+      prevBtn.disabled = currentPage === 0;
+      nextBtn.disabled = start + ENTRIES_PER_PAGE >= allEntries.length;
+    }
+
+    prevBtn.onclick = () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderArchive();
+      }
+    };
+
+    nextBtn.onclick = () => {
+      if ((currentPage + 1) * ENTRIES_PER_PAGE < allEntries.length) {
+        currentPage++;
+        renderArchive();
+      }
+    };
+
+    // 預設日期填今天
+    dateInput.valueAsDate = new Date();
   </script>
 </body>
 </html>
