@@ -46,43 +46,172 @@
       align-items: center;
       gap: 0.5rem;
     }
+    #floating-form, #edit-form {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 2px solid #ccc;
+      padding: 20px;
+      z-index: 1000;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+
+    .overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      z-index: 999;
+    }
+
+    .form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-header span {
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .close-btn {
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 15px;
+      gap: 10px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0;
+      right: 0; bottom: 0;
+      background-color: #ccc;
+      border-radius: 34px;
+      transition: .4s;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      border-radius: 50%;
+      transition: .4s;
+    }
+
+    input:checked + .slider {
+      background-color: #4caf50;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+
+    #addDiaryBtn {
+      float: right;
+      margin: 10px;
+    }
+
+    .edit-icon {
+      cursor: pointer;
+      float: right;
+      font-size: 16px;
+    }
+
   </style>
 </head>
-<body>
-  <h1>📖 我的漫畫慢生活日記</h1>
+<body style="background: #fdf6e3; font-family: sans-serif">
 
-  <div id="auth-section">
-    <span id="user-name"></span>
-    <button id="login-btn">Google 登入</button>
-    <button id="logout-btn" style="display:none;">登出</button>
-  </div>
+  <h1 style="display: flex; justify-content: space-between; align-items: center;">
+    我的漫畫慢生活日記
+    <button id="addDiaryBtn">新增日記</button>
+  </h1>
 
-  <div id="diary-form" style="display: none;">
-    <input type="text" id="title" placeholder="今天看的漫畫 / 書名" />
-    <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
-    <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊" />
-    <input type="date" id="date" />
-    <div class="toggle-row">
-      <label for="isPublic">是否公開：</label>
-      <input type="checkbox" id="isPublic" />
+  <!-- ✅ 浮窗與遮罩 -->
+  <div class="overlay" id="overlay"></div>
+  <div id="floating-form">
+    <div class="form-header">
+      <span>新增日記</span>
+      <span class="close-btn" onclick="closeFloatingForm()">✖</span>
     </div>
-    <button id="addEntry">加入日記</button>
-  </div>
-
-  <div id="archive-section">
-    <h2>📚 過往日記</h2>
-    <div id="archive-entries"></div>
-    <div id="archive-controls">
-      <button id="prev-btn">←</button>
-      <button id="next-btn">→</button>
+    <input type="text" id="title" placeholder="今天看的漫畫 / 書名"><br>
+    <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea><br>
+    <input type="text" id="emoji" placeholder="用一個 emoji 表達今天的心情 😊"><br>
+    <input type="date" id="date"><br>
+    <label>是否公開：
+      <label class="toggle-switch">
+        <input type="checkbox" id="isPublicToggle">
+        <span class="slider"></span>
+      </label>
+    </label>
+    <div class="form-actions">
+      <button onclick="closeFloatingForm()">取消</button>
+      <button onclick="submitDiary()">加入日記</button>
     </div>
   </div>
 
-  <!-- Firebase Module -->
+  <!-- ✅ 編輯浮窗區塊 -->
+  <div id="edit-form">
+    <div class="form-header">
+      <span>編輯日記</span>
+      <span class="close-btn" onclick="closeEditForm()">✖</span>
+    </div>
+    <input type="text" id="edit-title"><br>
+    <textarea id="edit-thoughts"></textarea><br>
+    <input type="text" id="edit-emoji"><br>
+    <input type="date" id="edit-date"><br>
+    <label>是否公開：
+      <label class="toggle-switch">
+        <input type="checkbox" id="edit-isPublicToggle">
+        <span class="slider"></span>
+      </label>
+    </label>
+    <div class="form-actions">
+      <button onclick="closeEditForm()">取消</button>
+      <button onclick="submitEdit()">編輯完成</button>
+    </div>
+  </div>
+
+  <!-- ✅ 原本 archive 卡片區 & JS -->
+  <div id="diary-archive"></div>
+
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue, get, child } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
-    import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import {
+      getDatabase, ref, push, set, onValue, update
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDubkeIiVxXQ-fAUU5KTCuh15EnP0k-NiY",
@@ -95,127 +224,108 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
     const db = getDatabase(app);
-    const auth = getAuth();
-    const provider = new GoogleAuthProvider();
 
-    const loginBtn = document.getElementById("login-btn");
-    const logoutBtn = document.getElementById("logout-btn");
-    const userNameSpan = document.getElementById("user-name");
-    const diaryForm = document.getElementById("diary-form");
-
-    const titleInput = document.getElementById("title");
-    const thoughtsInput = document.getElementById("thoughts");
-    const emojiInput = document.getElementById("emoji");
-    const dateInput = document.getElementById("date");
-    const isPublicInput = document.getElementById("isPublic");
-    const addEntryBtn = document.getElementById("addEntry");
-    const archiveDiv = document.getElementById("archive-entries");
-    const prevBtn = document.getElementById("prev-btn");
-    const nextBtn = document.getElementById("next-btn");
-
-    let currentUser = null;
-    let allEntries = [];
-    let currentPage = 0;
-    const ENTRIES_PER_PAGE = 3;
-
-    loginBtn.onclick = () => signInWithPopup(auth, provider);
-    logoutBtn.onclick = () => signOut(auth);
+    let currentUID = null;
+    let editEntryId = null;
 
     onAuthStateChanged(auth, (user) => {
-      currentUser = user;
       if (user) {
-        userNameSpan.textContent = `你好，${user.displayName}`;
-        loginBtn.style.display = "none";
-        logoutBtn.style.display = "inline";
-        diaryForm.style.display = "block";
+        currentUID = user.uid;
+        loadUserEntries();
       } else {
-        userNameSpan.textContent = "";
-        loginBtn.style.display = "inline";
-        logoutBtn.style.display = "none";
-        diaryForm.style.display = "none";
+        currentUID = null;
       }
-      fetchEntries();
     });
 
-    addEntryBtn.onclick = () => {
-      const title = titleInput.value.trim();
-      const thoughts = thoughtsInput.value.trim();
-      const emoji = emojiInput.value.trim();
-      const date = dateInput.value.trim();
-      const isPublic = isPublicInput.checked;
+    // === 浮窗開關 ===
+    document.getElementById("addDiaryBtn").addEventListener("click", () => {
+      document.getElementById("overlay").style.display = "block";
+      document.getElementById("floating-form").style.display = "block";
+    });
 
-      if (!title || !thoughts || !emoji || !date) {
-        alert("請填寫所有欄位");
-        return;
-      }
+    function closeFloatingForm() {
+      document.getElementById("floating-form").style.display = "none";
+      document.getElementById("overlay").style.display = "none";
+    }
 
-      const entry = {
+    function closeEditForm() {
+      document.getElementById("edit-form").style.display = "none";
+      document.getElementById("overlay").style.display = "none";
+    }
+
+    // === 新增日記 ===
+    function submitDiary() {
+      if (!currentUID) return alert("請先登入！");
+      const title = document.getElementById("title").value;
+      const thoughts = document.getElementById("thoughts").value;
+      const emoji = document.getElementById("emoji").value;
+      const date = document.getElementById("date").value;
+      const isPublic = document.getElementById("isPublicToggle").checked;
+
+      const entryRef = push(ref(db, "entries"));
+      set(entryRef, {
+        uid: currentUID,
         title,
         thoughts,
         emoji,
         date,
-        isPublic,
-        uid: currentUser.uid,
-        createdAt: Date.now()
+        isPublic
+      });
+
+      closeFloatingForm();
+    }
+
+    // === 撈資料 + 顯示卡片 ===
+    function loadUserEntries() {
+      const diaryRef = ref(db, "entries");
+      onValue(diaryRef, (snapshot) => {
+        const archive = document.getElementById("diary-archive");
+        archive.innerHTML = "";
+        snapshot.forEach((child) => {
+          const data = child.val();
+          const key = child.key;
+          if (data.uid === currentUID || data.isPublic) {
+            const card = document.createElement("div");
+            card.innerHTML = `
+              <div style="border: 1px solid #ccc; padding: 10px; margin: 10px;">
+                <div><b>${data.date}</b> - ${data.title} ${data.emoji}
+                  <span class="edit-icon" onclick="editDiary('${key}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">✏️</span>
+                </div>
+                <div>${data.thoughts}</div>
+              </div>`;
+            archive.appendChild(card);
+          }
+        });
+      });
+    }
+
+    // === 編輯邏輯 ===
+    window.editDiary = (id, data) => {
+      document.getElementById("overlay").style.display = "block";
+      document.getElementById("edit-form").style.display = "block";
+      editEntryId = id;
+
+      document.getElementById("edit-title").value = data.title;
+      document.getElementById("edit-thoughts").value = data.thoughts;
+      document.getElementById("edit-emoji").value = data.emoji;
+      document.getElementById("edit-date").value = data.date;
+      document.getElementById("edit-isPublicToggle").checked = data.isPublic;
+    };
+
+    function submitEdit() {
+      const newData = {
+        title: document.getElementById("edit-title").value,
+        thoughts: document.getElementById("edit-thoughts").value,
+        emoji: document.getElementById("edit-emoji").value,
+        date: document.getElementById("edit-date").value,
+        isPublic: document.getElementById("edit-isPublicToggle").checked
       };
-
-      push(ref(db, "diaryEntries"), entry);
-
-      titleInput.value = "";
-      thoughtsInput.value = "";
-      emojiInput.value = "";
-      dateInput.value = "";
-      isPublicInput.checked = false;
-    };
-
-    function fetchEntries() {
-      get(ref(db, "diaryEntries")).then((snapshot) => {
-        const data = snapshot.val() || {};
-        allEntries = Object.values(data).filter(entry => {
-          return entry.isPublic || (currentUser && entry.uid === currentUser.uid);
-        }).sort((a, b) => b.createdAt - a.createdAt);
-        renderArchive();
-      });
+      update(ref(db, "entries/" + editEntryId), newData);
+      closeEditForm();
     }
 
-    function renderArchive() {
-      archiveDiv.innerHTML = "";
-      const start = currentPage * ENTRIES_PER_PAGE;
-      const pageEntries = allEntries.slice(start, start + ENTRIES_PER_PAGE);
-
-      pageEntries.forEach(entry => {
-        const div = document.createElement("div");
-        div.className = "archive-entry";
-        div.innerHTML = `
-          <h3>${entry.title}</h3>
-          <p>${entry.thoughts}</p>
-          <p>${entry.emoji}</p>
-          <p><strong>${entry.date}</strong></p>
-        `;
-        archiveDiv.appendChild(div);
-      });
-
-      prevBtn.disabled = currentPage === 0;
-      nextBtn.disabled = start + ENTRIES_PER_PAGE >= allEntries.length;
-    }
-
-    prevBtn.onclick = () => {
-      if (currentPage > 0) {
-        currentPage--;
-        renderArchive();
-      }
-    };
-
-    nextBtn.onclick = () => {
-      if ((currentPage + 1) * ENTRIES_PER_PAGE < allEntries.length) {
-        currentPage++;
-        renderArchive();
-      }
-    };
-
-    // 預設日期填今天
-    dateInput.valueAsDate = new Date();
   </script>
 </body>
 </html>
