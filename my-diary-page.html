@@ -8,6 +8,16 @@
       font-family: sans-serif;
       padding: 2rem;
       background: #fdf6e3;
+      position: relative;
+    }
+    h1 {
+      display: inline-block;
+    }
+    #user-info {
+      position: absolute;
+      top: 2rem;
+      right: 2rem;
+      text-align: right;
     }
     input, textarea {
       display: block;
@@ -22,7 +32,11 @@
       border: none;
       color: white;
       cursor: pointer;
-      margin-right: 1rem;
+      margin-top: 1rem;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
     }
     .entry {
       background: white;
@@ -34,10 +48,11 @@
 </head>
 <body>
   <h1>📖 我的漫畫慢生活日記</h1>
-
-  <button id="login">使用 Google 登入</button>
-  <button id="logout" style="display: none;">登出</button>
-  <p id="user-info">請先登入以寫日記</p>
+  <div id="user-info">
+    <span id="username"></span>
+    <button id="logout" style="display: none;">登出</button>
+    <button id="login">使用 Google 登入</button>
+  </div>
 
   <input type="text" id="title" placeholder="今天看的漫畫 / 書名">
   <textarea id="thoughts" placeholder="寫下你的一句感想..."></textarea>
@@ -50,17 +65,22 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
     import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
-    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+    import {
+      getAuth,
+      signInWithPopup,
+      GoogleAuthProvider,
+      signOut,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDubkeIiVxXQ-fAUU5KTCuh15EnP0k-NiY",
       authDomain: "diary-web-7384b.firebaseapp.com",
       databaseURL: "https://diary-web-7384b-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "diary-web-7384b",
-      storageBucket: "diary-web-7384b.firebasestorage.app",
+      storageBucket: "diary-web-7384b.appspot.com",
       messagingSenderId: "992846427066",
-      appId: "1:992846427066:web:77e054330f232d44352383",
-      measurementId: "G-N3ZCCZXX7T"
+      appId: "1:992846427066:web:77e054330f232d44352383"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -68,14 +88,16 @@
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
+    const loginBtn = document.getElementById("login");
+    const logoutBtn = document.getElementById("logout");
+    const usernameSpan = document.getElementById("username");
+    const addEntryBtn = document.getElementById("addEntry");
     const titleInput = document.getElementById("title");
     const thoughtsInput = document.getElementById("thoughts");
     const emojiInput = document.getElementById("emoji");
     const entriesDiv = document.getElementById("entries");
-    const addEntryBtn = document.getElementById("addEntry");
-    const loginBtn = document.getElementById("login");
-    const logoutBtn = document.getElementById("logout");
-    const userInfo = document.getElementById("user-info");
+
+    let currentUser = null;
 
     loginBtn.addEventListener("click", () => {
       signInWithPopup(auth, provider).catch((error) => {
@@ -89,24 +111,27 @@
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        userInfo.textContent = `👋 歡迎, ${user.displayName}`;
+        currentUser = user;
+        usernameSpan.textContent = `${user.displayName}`;
         loginBtn.style.display = "none";
         logoutBtn.style.display = "inline-block";
         addEntryBtn.disabled = false;
+        loadEntries(user.uid);
       } else {
-        userInfo.textContent = "請先登入以寫日記";
+        currentUser = null;
+        usernameSpan.textContent = "";
         loginBtn.style.display = "inline-block";
         logoutBtn.style.display = "none";
         addEntryBtn.disabled = true;
+        entriesDiv.innerHTML = "<p>請先登入以查看你的日記。</p>";
       }
     });
 
     addEntryBtn.addEventListener("click", () => {
-      const title = titleInput.value;
-      const thoughts = thoughtsInput.value;
-      const emoji = emojiInput.value;
-
-      if (!title || !thoughts || !emoji) return;
+      const title = titleInput.value.trim();
+      const thoughts = thoughtsInput.value.trim();
+      const emoji = emojiInput.value.trim();
+      if (!title || !thoughts || !emoji || !currentUser) return;
 
       const entry = {
         title,
@@ -115,29 +140,32 @@
         createdAt: Date.now()
       };
 
-      push(ref(db, "entries"), entry);
+      const userRef = ref(db, `users/${currentUser.uid}/entries`);
+      push(userRef, entry);
 
       titleInput.value = "";
       thoughtsInput.value = "";
       emojiInput.value = "";
     });
 
-    onValue(ref(db, "entries"), (snapshot) => {
-      const data = snapshot.val();
-      entriesDiv.innerHTML = "";
-
-      const sorted = Object.entries(data || {}).sort((a, b) => b[1].createdAt - a[1].createdAt);
-      sorted.forEach(([key, entry]) => {
-        const entryDiv = document.createElement("div");
-        entryDiv.className = "entry";
-        entryDiv.innerHTML = `
-          <h3>${entry.title}</h3>
-          <p>${entry.thoughts}</p>
-          <p>${entry.emoji}</p>
-        `;
-        entriesDiv.appendChild(entryDiv);
+    function loadEntries(uid) {
+      const userRef = ref(db, `users/${uid}/entries`);
+      onValue(userRef, (snapshot) => {
+        const data = snapshot.val();
+        entriesDiv.innerHTML = "";
+        const sorted = Object.entries(data || {}).sort((a, b) => b[1].createdAt - a[1].createdAt);
+        sorted.forEach(([key, entry]) => {
+          const entryDiv = document.createElement("div");
+          entryDiv.className = "entry";
+          entryDiv.innerHTML = `
+            <h3>${entry.title}</h3>
+            <p>${entry.thoughts}</p>
+            <p>${entry.emoji}</p>
+          `;
+          entriesDiv.appendChild(entryDiv);
+        });
       });
-    });
+    }
   </script>
 </body>
 </html>
